@@ -1,0 +1,1462 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام إدارة المتدربين</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+
+        body {
+            font-family: 'Tajawal', sans-serif;
+        }
+
+        .modal {
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            transform: translateY(-20px);
+            opacity: 0;
+        }
+
+        .modal.active {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .overlay {
+            transition: opacity 0.3s ease;
+        }
+
+        .overlay.active {
+            opacity: 1;
+        }
+
+        .trainee-card {
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .trainee-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        @media (max-width: 640px) {
+            .table-header {
+                display: none;
+            }
+
+            .trainee-row {
+                display: flex;
+                flex-direction: column;
+                border: 1px solid #e5e7eb;
+                border-radius: 0.5rem;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            }
+
+            .trainee-row td {
+                display: flex;
+                justify-content: space-between;
+                padding: 0.5rem 0;
+                border-bottom: 1px solid #f3f4f6;
+            }
+
+            .trainee-row td:last-child {
+                border-bottom: none;
+            }
+
+            .trainee-row td::before {
+                content: attr(data-label);
+                font-weight: bold;
+                margin-left: 0.5rem;
+            }
+        }
+
+        .date-select-container {
+            display: flex;
+            gap: 8px;
+        }
+
+        .date-select {
+            flex: 1;
+        }
+
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .toast {
+            background-color: #333;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .toast.success {
+            background-color: #4CAF50;
+        }
+
+        .toast.error {
+            background-color: #f44336;
+        }
+
+        @media (max-width: 768px) {
+            .modal {
+                max-width: 95%;
+                margin: 1rem;
+            }
+        }
+
+        #deleteConfirmationOverlay {
+            display: none;
+        }
+
+        #deleteConfirmationModal {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            text-align: center;
+        }
+
+        #deleteConfirmationModal h3 {
+            color: #dc2626;
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        #deleteConfirmationModal p {
+            margin-bottom: 1.5rem;
+            color: #4b5563;
+        }
+
+        .delete-confirmation-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .delete-confirmation-buttons button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .delete-confirmation-buttons .confirm-delete {
+            background-color: #dc2626;
+            color: white;
+            border: 1px solid #dc2626;
+        }
+
+        .delete-confirmation-buttons .confirm-delete:hover {
+            background-color: #b91c1c;
+            border-color: #b91c1c;
+        }
+
+        .delete-confirmation-buttons .cancel-delete {
+            background-color: white;
+            color: #4b5563;
+            border: 1px solid #d1d5db;
+        }
+
+        .delete-confirmation-buttons .cancel-delete:hover {
+            background-color: #f3f4f6;
+        }
+
+        #addTraineeModal, #editTraineeModal {
+            height: 100%;
+            overflow-y: scroll;
+        }
+
+        #deleteConfirmationOverlay{
+            display: block !important;
+        }
+
+        /* Modal لعرض الملاحظات */
+        #viewNotesOverlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 60;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #viewNotesModal {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: 90%;
+            max-width: 600px;
+            position: relative;
+        }
+
+        #viewNotesModal .close-button {
+            position: absolute;
+    top: 0.2rem;
+    left: 1.5rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: gray;
+        }
+
+        #viewNotesModal .note-content {
+            white-space: pre-line;
+            white-space: normal;
+        }
+
+        /* Notification Bell */
+        .notification-bell {
+            position: relative;
+            cursor: pointer;
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: red;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        /* Settings Modal */
+        #settingsModal {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: 90%;
+            max-width: 500px;
+            position: relative;
+        }
+
+        /* Notifications Modal */
+        #notificationsModal {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            width: 90%;
+            max-width: 600px;
+            position: relative;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .notification-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notification-item:last-child {
+            border-bottom: none;
+        }
+
+        .notification-warning {
+            color: #e67e22;
+        }
+
+        .notification-danger {
+            color: #e74c3c;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .radio-option {
+            display: flex;
+            align-items: center;
+        }
+
+        .radio-option input {
+            margin-left: 5px;
+        }
+        .action{
+            /* margin-top: 33px; */
+        }
+
+        #editNotes{
+            height: 150px;
+        }
+        i{
+          font-size: 27px;  
+        }
+        #searchResultsCount{
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto px-4 py-8">
+        <header class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-indigo-700">
+                <i class="fas fa-users mr-2"></i> نظام إدارة المتدربين
+            </h1>
+            <div class="flex items-center space-x-4 space-x-reverse">
+                <div class="notification-bell" id="notificationBell">
+                    <i class="fas fa-bell text-2xl text-gray-600"></i>
+                    <span class="notification-badge hidden" id="notificationBadge">0</span>
+                </div>
+                <button id="settingsBtn" class="p-2 rounded-full hover:bg-gray-100">
+                    <i class="fas fa-cog text-2xl text-gray-600"></i>
+                </button>
+                <button id="addTraineeBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg flex items-center">
+                    <i class="fas fa-user-plus ml-2"></i> إضافة متدرب
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="bg-white p-4 rounded-lg shadow">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-500">إجمالي المتدربين</p>
+                        <h3 class="text-2xl font-bold" id="totalTrainees">0</h3>
+                    </div>
+                    <div class="bg-indigo-100 p-3 rounded-full">
+                        <i class="fas fa-users text-indigo-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-500">المتدربين نظام 8</p>
+                        <h3 class="text-2xl font-bold" id="system8Trainees">0</h3>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <i class="fas fa-user-check text-green-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-500">المتدربين نظام 12</p>
+                        <h3 class="text-2xl font-bold" id="system12Trainees">0</h3>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <i class="fas fa-user-clock text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white p-4 rounded-lg shadow">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-gray-500">إجمالي الأموال</p>
+                        <h3 class="text-2xl font-bold" id="totalMoney">0 ر.س</h3>
+                    </div>
+                    <div class="bg-yellow-100 p-3 rounded-full">
+                        <i class="fas fa-money-bill-wave text-yellow-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="searchResultsCount" class="text-sm text-gray-500 hidden">
+            العثور على <span class="font-bold">0</span> نتيجة
+        </div>
+
+    <div class="mb-4 flex justify-end relative">
+    <input 
+        style="padding-right: 17px;font-size: 20px;"
+        type="text" 
+        id="traineeSearch" 
+        placeholder="ابحث باسم المتدرب..." 
+        class="p-2 pr-10 border rounded-md w-full max-w-md text-right "
+    >
+    <span id="clearSearch" class="absolute left-3 top-3 text-gray-400 cursor-pointer hidden">
+        <i class="fas fa-times"></i>
+    </span>
+</div>
+        
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50 table-header">
+                        <tr>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الاسم</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">رقم ولي الأمر</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">عمر المتدرب</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">تاريخ الاشتراك</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">تاريخ نهاية الاشتراك</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">نظام الاشتراك</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">سعر الاشتراك</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">طريقة الدفع</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الملاحظات</th>
+                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200" id="traineesTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="emptyState" class="text-center py-12" style="display: none;">
+            <i class="fas fa-users-slash text-4xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-500">لا يوجد متدربين مسجلين</h3>
+            <p class="text-gray-400 mt-1">اضغط على زر "إضافة متدرب" لبدء التسجيل</p>
+        </div>
+    </div>
+
+    <!-- Add Trainee Modal -->
+    <div id="modalOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overlay opacity-0 pointer-events-none">
+        <div id="addTraineeModal" class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 modal">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-xl font-semibold text-gray-800">إضافة متدرب جديد</h3>
+            </div>
+            <div class="px-6 py-4">
+                <form id="addTraineeForm">
+                    <div class="mb-4">
+                        <label for="name" class="block text-sm font-medium text-gray-700 mb-1">اسم المتدرب</label>
+                        <input type="text" id="name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="parentPhone" class="block text-sm font-medium text-gray-700 mb-1">رقم ولي الأمر</label>
+                        <input type="tel" id="parentPhone" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="age" class="block text-sm font-medium text-gray-700 mb-1">عمر المتدرب</label>
+                        <input type="number" id="age" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">تاريخ الاشتراك</label>
+                        <div class="date-select-container">
+                            <select id="day" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">اليوم</option>
+                            </select>
+                            <select id="month" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">الشهر</option>
+                            </select>
+                            <select id="year" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">السنة</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">تاريخ نهاية الاشتراك</label>
+                        <div class="date-select-container">
+                            <select id="endDay" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">اليوم</option>
+                            </select>
+                            <select id="endMonth" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">الشهر</option>
+                            </select>
+                            <select id="endYear" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">السنة</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="subscriptionType" class="block text-sm font-medium text-gray-700 mb-1">نظام الاشتراك</label>
+                        <select id="subscriptionType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                            <option value="">اختر نظام الاشتراك</option>
+                            <option value="8">8 </option>
+                            <option value="12">12 </option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="subscriptionPrice" class="block text-sm font-medium text-gray-700 mb-1">سعر الاشتراك</label>
+                        <input type="number" id="subscriptionPrice" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="paymentMethod" class="block text-sm font-medium text-gray-700 mb-1">طريقة الدفع</label>
+                        <select id="paymentMethod" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                            <option value="">اختر طريقة الدفع</option>
+                            <option value="نقدي">نقدي</option>
+                            <option value="كاش">كاش</option>
+                            <option value="فيزا">فيزا</option>
+                            <option value="انسابي">انسابي</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="notes" class="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
+                        <textarea id="notes" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 space-x-reverse">
+                <button id="cancelBtn" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">إلغاء</button>
+                <button id="saveBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Trainee Modal -->
+    <div id="editModalOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overlay opacity-0 pointer-events-none">
+        <div id="editTraineeModal" class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 modal">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-xl font-semibold text-gray-800">تعديل بيانات المتدرب</h3>
+            </div>
+            <div class="px-6 py-4">
+                <form id="editTraineeForm">
+                    <input type="hidden" id="editId">
+                    <div class="mb-4">
+                        <label for="editName" class="block text-sm font-medium text-gray-700 mb-1">اسم المتدرب</label>
+                        <input type="text" id="editName" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="editParentPhone" class="block text-sm font-medium text-gray-700 mb-1">رقم ولي الأمر</label>
+                        <input type="tel" id="editParentPhone" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="editAge" class="block text-sm font-medium text-gray-700 mb-1">عمر المتدرب</label>
+                        <input type="number" id="editAge" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">تاريخ الاشتراك</label>
+                        <div class="date-select-container">
+                            <select id="editDay" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">اليوم</option>
+                            </select>
+                            <select id="editMonth" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">الشهر</option>
+                            </select>
+                            <select id="editYear" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">السنة</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">تاريخ نهاية الاشتراك</label>
+                        <div class="date-select-container">
+                            <select id="editEndDay" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">اليوم</option>
+                            </select>
+                            <select id="editEndMonth" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">الشهر</option>
+                            </select>
+                            <select id="editEndYear" class="date-select px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                                <option value="">السنة</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-4">
+                        <label for="editSubscriptionType" class="block text-sm font-medium text-gray-700 mb-1">نظام الاشتراك</label>
+                        <select id="editSubscriptionType" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                            <option value="">اختر نظام الاشتراك</option>
+                            <option value="8">8 </option>
+                            <option value="12">12 </option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="editSubscriptionPrice" class="block text-sm font-medium text-gray-700 mb-1">سعر الاشتراك</label>
+                        <input type="number" id="editSubscriptionPrice" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    </div>
+                    <div class="mb-4">
+                        <label for="editPaymentMethod" class="block text-sm font-medium text-gray-700 mb-1">طريقة الدفع</label>
+                        <select id="editPaymentMethod" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                            <option value="">اختر طريقة الدفع</option>
+                            <option value="نقدي">نقدي</option>
+                            <option value="كاش">كاش</option>
+                            <option value="فيزا">فيزا</option>
+                            <option value="انسابي">انسابي</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label for="editNotes" class="block text-sm font-medium text-gray-700 mb-1">ملاحظات</label>
+                        <textarea id="editNotes" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 space-x-reverse">
+                <button id="editCancelBtn" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">إلغاء</button>
+                <button id="updateBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">تحديث</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overlay opacity-0 pointer-events-none">
+        <div id="settingsModal" class="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 modal">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-xl font-semibold text-gray-800">إعدادات التذكير</h3>
+            </div>
+            <div class="px-6 py-4">
+                <form id="settingsForm">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">إرسال تذكير قبل انتهاء الاشتراك بـ:</label>
+                        <div class="radio-group">
+                            <div class="radio-option">
+                                <input type="radio" id="reminderDays" name="reminderType" value="days" checked>
+                                <label for="reminderDays">أيام</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="reminderWeeks" name="reminderType" value="weeks">
+                                <label for="reminderWeeks">أسابيع</label>
+                            </div>
+                            <div class="radio-option">
+                                <input type="radio" id="reminderMonths" name="reminderType" value="months">
+                                <label for="reminderMonths">شهور</label>
+                            </div>
+                        </div>
+                        <input type="number" id="reminderValue" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500" min="1" value="7" required>
+                    </div>
+                </form>
+                <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 space-x-reverse">
+                    <button id="saveButton" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">حفظ البيانات احتياطي</button>
+                    <button id="fetchButton" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">استرجاع البيانات احتياطي</button>
+                </div>
+           
+            </div>
+            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 space-x-reverse">
+                <button id="settingsCancelBtn" class="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">إلغاء</button>
+                <button id="saveSettingsBtn" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">حفظ</button>
+            </div>
+        </div>
+    </div>
+
+ <!-- Notifications Modal -->
+<div id="notificationsOverlay" class="fixed inset-0 bg-black bg-opacity-30 z-50 flex items-center justify-center overlay opacity-0 pointer-events-none transition-opacity duration-300">
+    <!-- Notifications Modal Content -->
+    <div id="notificationsModal" class="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 modal relative overflow-hidden border border-gray-100">
+        <!-- Header -->
+        <div class="bg-indigo-50 px-6 py-4 border-b border-indigo-100">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xl font-bold text-indigo-700">
+                    <i class="fas fa-bell mr-2"></i> الإشعارات
+                </h3>
+                <button id="closeNotificationsBtn" class="text-indigo-500 hover:text-indigo-700 transition-colors">
+                    <i class="fas fa-times text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Notifications List -->
+        <div class="px-4 py-4 max-h-[60vh] overflow-y-auto" id="notificationsList">
+            <!-- Notifications will be added here dynamically -->
+        </div>
+
+       
+    </div>
+</div>
+
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <div id="deleteConfirmationOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center overlay opacity-0 pointer-events-none">
+        <div id="deleteConfirmationModal">
+            <h3 class="font-bold">تأكيد الحذف</h3>
+            <p>هل أنت متأكد أنك تريد حذف هذا المتدرب؟</p>
+            <div class="delete-confirmation-buttons">
+                <button id="confirmDeleteBtn" class="confirm-delete">نعم، احذف</button>
+                <button id="cancelDeleteBtn" class="cancel-delete">إلغاء</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewNotesOverlay" class="overlay">
+        <div id="viewNotesModal" class="modal">
+            <span class="close-button" onclick="closeNotesModal()">&times;</span>
+            <div class="note-content" id="fullNoteContent">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // DOM Elements
+            const addTraineeBtn = document.getElementById('addTraineeBtn');
+            const modalOverlay = document.getElementById('modalOverlay');
+            const addTraineeModal = document.getElementById('addTraineeModal');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const saveBtn = document.getElementById('saveBtn');
+            const addTraineeForm = document.getElementById('addTraineeForm');
+            const traineesTableBody = document.getElementById('traineesTableBody');
+            const emptyState = document.getElementById('emptyState');
+            const editModalOverlay = document.getElementById('editModalOverlay');
+            const editTraineeModal = document.getElementById('editTraineeModal');
+            const editCancelBtn = document.getElementById('editCancelBtn');
+            const updateBtn = document.getElementById('updateBtn');
+            const editTraineeForm = document.getElementById('editTraineeForm');
+            const toastContainer = document.getElementById('toastContainer');
+            const settingsBtn = document.getElementById('settingsBtn');
+            const settingsOverlay = document.getElementById('settingsOverlay');
+            const settingsModal = document.getElementById('settingsModal');
+            const settingsCancelBtn = document.getElementById('settingsCancelBtn');
+            const saveSettingsBtn = document.getElementById('saveSettingsBtn');
+            const settingsForm = document.getElementById('settingsForm');
+            const notificationBell = document.getElementById('notificationBell');
+            const notificationBadge = document.getElementById('notificationBadge');
+            const notificationsOverlay = document.getElementById('notificationsOverlay');
+            const notificationsModal = document.getElementById('notificationsModal');
+            const closeNotificationsBtn = document.getElementById('closeNotificationsBtn');
+            const notificationsList = document.getElementById('notificationsList');
+
+            // Delete Confirmation Modal Elements
+            const deleteConfirmationOverlay = document.getElementById('deleteConfirmationOverlay');
+            const deleteConfirmationModal = document.getElementById('deleteConfirmationModal');
+            const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
+            const cancelDeleteBtn = document.getElementById('cancelDeleteBtn');
+            let traineeToDeleteId = null;
+
+            // Stats Elements
+            const totalTraineesEl = document.getElementById('totalTrainees');
+            const system8TraineesEl = document.getElementById('system8Trainees');
+            const system12TraineesEl = document.getElementById('system12Trainees');
+            const totalMoneyEl = document.getElementById('totalMoney');
+
+            // Modal لعرض الملاحظات
+            const viewNotesOverlay = document.getElementById('viewNotesOverlay');
+            const viewNotesModal = document.getElementById('viewNotesModal');
+            const fullNoteContent = document.getElementById('fullNoteContent');
+
+            // Trainees Data
+            let trainees = JSON.parse(localStorage.getItem('trainees')) || [];
+            
+            // Settings Data
+            let settings = JSON.parse(localStorage.getItem('settings')) || {
+                reminderType: 'days',
+                reminderValue: 7
+            };
+            
+            // Notifications Data
+            let notifications = JSON.parse(localStorage.getItem('notifications')) || [];
+            let notificationCheckInterval;
+
+            // Initialize the app
+            init();
+
+            // Event Listeners
+            addTraineeBtn.addEventListener('click', openAddModal);
+            cancelBtn.addEventListener('click', closeAddModal);
+            saveBtn.addEventListener('click', saveTrainee);
+            editCancelBtn.addEventListener('click', closeEditModal);
+            updateBtn.addEventListener('click', updateTrainee);
+            cancelDeleteBtn.addEventListener('click', closeDeleteConfirmationModal);
+            confirmDeleteBtn.addEventListener('click', confirmDeleteTrainee);
+            settingsBtn.addEventListener('click', openSettingsModal);
+            settingsCancelBtn.addEventListener('click', closeSettingsModal);
+            saveSettingsBtn.addEventListener('click', saveSettings);
+            notificationBell.addEventListener('click', openNotificationsModal);
+            closeNotificationsBtn.addEventListener('click', closeNotificationsModal);
+
+            // Functions
+            function init() {
+                renderTrainees();
+                updateStats();
+                populateDateSelects();
+                loadSettings();
+                checkForNotifications(); // التحقق من الإشعارات عند فتح التطبيق
+                
+                // التحقق من الإشعارات كل 5 ثواني
+                notificationCheckInterval = setInterval(checkForNotifications, 5000);
+            }
+
+            function populateDateSelects() {
+                const addDaySelect = document.getElementById('day');
+                const addMonthSelect = document.getElementById('month');
+                const addYearSelect = document.getElementById('year');
+                const addEndDaySelect = document.getElementById('endDay');
+                const addEndMonthSelect = document.getElementById('endMonth');
+                const addEndYearSelect = document.getElementById('endYear');
+                const editDaySelect = document.getElementById('editDay');
+                const editMonthSelect = document.getElementById('editMonth');
+                const editYearSelect = document.getElementById('editYear');
+                const editEndDaySelect = document.getElementById('editEndDay');
+                const editEndMonthSelect = document.getElementById('editEndMonth');
+                const editEndYearSelect = document.getElementById('editEndYear');
+
+                function populateDays(selectElement) {
+                    selectElement.innerHTML = '<option value="">اليوم</option>';
+                    for (let i = 1; i <= 31; i++) {
+                        const option = document.createElement('option');
+                        option.value = i < 10 ? '0' + i : i;
+                        option.textContent = i;
+                        selectElement.appendChild(option);
+                    }
+                }
+
+                function populateMonths(selectElement) {
+                    selectElement.innerHTML = '<option value="">الشهر</option>';
+                    for (let i = 1; i <= 12; i++) {
+                        const option = document.createElement('option');
+                        option.value = i < 10 ? '0' + i : i;
+                        option.textContent = i;
+                        selectElement.appendChild(option);
+                    }
+                }
+
+                function populateYears(selectElement) {
+                    selectElement.innerHTML = '<option value="">السنة</option>';
+                    const currentYear = new Date().getFullYear();
+                    for (let i = 0; i <= 2; i++) {
+                        const year = currentYear + i;
+                        const option = document.createElement('option');
+                        option.value = year;
+                        option.textContent = year;
+                        selectElement.appendChild(option);
+                    }
+                }
+
+                // حقول تاريخ الاشتراك
+                populateDays(addDaySelect);
+                populateMonths(addMonthSelect);
+                populateYears(addYearSelect);
+                
+                // حقول تاريخ النهاية
+                populateDays(addEndDaySelect);
+                populateMonths(addEndMonthSelect);
+                populateYears(addEndYearSelect);
+                
+                // حقول التعديل
+                populateDays(editDaySelect);
+                populateMonths(editMonthSelect);
+                populateYears(editYearSelect);
+                populateDays(editEndDaySelect);
+                populateMonths(editEndMonthSelect);
+                populateYears(editEndYearSelect);
+            }
+
+            function openAddModal() {
+                modalOverlay.classList.add('active', 'pointer-events-auto');
+                addTraineeModal.classList.add('active');
+            }
+
+            function closeAddModal() {
+                modalOverlay.classList.remove('active', 'pointer-events-auto');
+                addTraineeModal.classList.remove('active');
+                addTraineeForm.reset();
+            }
+
+            function saveTrainee() {
+                if (!addTraineeForm.checkValidity()) {
+                    addTraineeForm.reportValidity();
+                    return;
+                }
+
+                const day = document.getElementById('day').value;
+                const month = document.getElementById('month').value;
+                const year = document.getElementById('year').value;
+                const endDay = document.getElementById('endDay').value;
+                const endMonth = document.getElementById('endMonth').value;
+                const endYear = document.getElementById('endYear').value;
+
+                if (!day || !month || !year || !endDay || !endMonth || !endYear) {
+                    alert('الرجاء اختيار تاريخ الاشتراك وتاريخ النهاية كاملاً (يوم، شهر، سنة)');
+                    return;
+                }
+
+                const newTrainee = {
+                    id: Date.now().toString(),
+                    name: document.getElementById('name').value,
+                    parentPhone: document.getElementById('parentPhone').value,
+                    age: document.getElementById('age').value,
+                    subscriptionDate: `${day}/${month}/${year}`,
+                    endDate: `${endDay}/${endMonth}/${endYear}`,
+                    subscriptionType: document.getElementById('subscriptionType').value,
+                    subscriptionPrice: document.getElementById('subscriptionPrice').value,
+                    paymentMethod: document.getElementById('paymentMethod').value,
+                    notes: document.getElementById('notes').value,
+                    createdAt: new Date().toISOString()
+                };
+
+                trainees.push(newTrainee);
+                saveToLocalStorage();
+                renderTrainees();
+                updateStats();
+                closeAddModal();
+                showToast('تمت إضافة المتدرب بنجاح', 'success');
+                
+                // التحقق من الإشعارات بعد إضافة متدرب جديد
+                checkForNotifications();
+            }
+
+            function openEditModal(id) {
+                const trainee = trainees.find(t => t.id === id);
+                if (trainee) {
+                    document.getElementById('editId').value = trainee.id;
+                    document.getElementById('editName').value = trainee.name;
+                    document.getElementById('editParentPhone').value = trainee.parentPhone;
+                    document.getElementById('editAge').value = trainee.age;
+
+                    if (trainee.subscriptionDate) {
+                        const dateParts = trainee.subscriptionDate.split('/');
+                        if (dateParts.length === 3) {
+                            document.getElementById('editDay').value = dateParts[0];
+                            document.getElementById('editMonth').value = dateParts[1];
+                            document.getElementById('editYear').value = dateParts[2];
+                        }
+                    }
+
+                    if (trainee.endDate) {
+                        const endDateParts = trainee.endDate.split('/');
+                        if (endDateParts.length === 3) {
+                            document.getElementById('editEndDay').value = endDateParts[0];
+                            document.getElementById('editEndMonth').value = endDateParts[1];
+                            document.getElementById('editEndYear').value = endDateParts[2];
+                        }
+                    }
+
+                    document.getElementById('editSubscriptionType').value = trainee.subscriptionType;
+                    document.getElementById('editSubscriptionPrice').value = trainee.subscriptionPrice;
+                    document.getElementById('editPaymentMethod').value = trainee.paymentMethod;
+                    document.getElementById('editNotes').value = trainee.notes || '';
+
+                    editModalOverlay.classList.add('active', 'pointer-events-auto');
+                    editTraineeModal.classList.add('active');
+                }
+            }
+
+            function closeEditModal() {
+                editModalOverlay.classList.remove('active', 'pointer-events-auto');
+                editTraineeModal.classList.remove('active');
+                editTraineeForm.reset();
+            }
+
+            function updateTrainee() {
+                if (!editTraineeForm.checkValidity()) {
+                    editTraineeForm.reportValidity();
+                    return;
+                }
+
+                const id = document.getElementById('editId').value;
+                const day = document.getElementById('editDay').value;
+                const month = document.getElementById('editMonth').value;
+                const year = document.getElementById('editYear').value;
+                const endDay = document.getElementById('editEndDay').value;
+                const endMonth = document.getElementById('editEndMonth').value;
+                const endYear = document.getElementById('editEndYear').value;
+
+                if (!day || !month || !year || !endDay || !endMonth || !endYear) {
+                    alert('الرجاء اختيار تاريخ الاشتراك وتاريخ النهاية كاملاً (يوم، شهر، سنة)');
+                    return;
+                }
+
+                const updatedTrainee = {
+                    id,
+                    name: document.getElementById('editName').value,
+                    parentPhone: document.getElementById('editParentPhone').value,
+                    age: document.getElementById('editAge').value,
+                    subscriptionDate: `${day}/${month}/${year}`,
+                    endDate: `${endDay}/${endMonth}/${endYear}`,
+                    subscriptionType: document.getElementById('editSubscriptionType').value,
+                    subscriptionPrice: document.getElementById('editSubscriptionPrice').value,
+                    paymentMethod: document.getElementById('editPaymentMethod').value,
+                    notes: document.getElementById('editNotes').value
+                };
+
+                trainees = trainees.map(t => t.id === id ? updatedTrainee : t);
+                saveToLocalStorage();
+                renderTrainees();
+                updateStats();
+                closeEditModal();
+                showToast('تم تحديث بيانات المتدرب بنجاح', 'success');
+                
+                // التحقق من الإشعارات بعد التعديل
+                checkForNotifications();
+            }
+
+            function openDeleteConfirmationModal(id) {
+                traineeToDeleteId = id;
+                deleteConfirmationOverlay.classList.add('active', 'pointer-events-auto');
+                deleteConfirmationModal.classList.add('active');
+            }
+
+            function closeDeleteConfirmationModal() {
+                deleteConfirmationOverlay.classList.remove('active', 'pointer-events-auto');
+                deleteConfirmationModal.classList.remove('active');
+                traineeToDeleteId = null;
+            }
+
+            function confirmDeleteTrainee() {
+                if (traineeToDeleteId) {
+                    trainees = trainees.filter(t => t.id !== traineeToDeleteId);
+                    saveToLocalStorage();
+                    renderTrainees();
+                    updateStats();
+                    closeDeleteConfirmationModal();
+                    showToast('تم حذف المتدرب بنجاح', 'success');
+                    
+                    // التحقق من الإشعارات بعد الحذف
+                    checkForNotifications();
+                }
+            }
+
+            function renderTrainees() {
+                traineesTableBody.innerHTML = '';
+                if (trainees.length === 0) {
+                    emptyState.style.display = 'block';
+                } else {
+                    emptyState.style.display = 'none';
+                    trainees.forEach(trainee => {
+                        const row = traineesTableBody.insertRow();
+                        row.classList.add('trainee-row');
+
+                        const nameCell = row.insertCell();
+                        nameCell.textContent = trainee.name;
+                        nameCell.dataset.label = 'الاسم';
+                        nameCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-right');
+
+                        const parentPhoneCell = row.insertCell();
+                        parentPhoneCell.textContent = trainee.parentPhone;
+                        parentPhoneCell.dataset.label = 'رقم ولي الأمر';
+                        parentPhoneCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-right');
+
+                        const ageCell = row.insertCell();
+                        ageCell.textContent = trainee.age;
+                        ageCell.dataset.label = 'عمر المتدرب';
+                        ageCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-right');
+
+                        const subscriptionDateCell = row.insertCell();
+                        subscriptionDateCell.textContent = trainee.subscriptionDate;
+                        subscriptionDateCell.dataset.label = 'تاريخ الاشتراك';
+                        subscriptionDateCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-right');
+
+                        const endDateCell = row.insertCell();
+                        endDateCell.textContent = trainee.endDate || '-';
+                        endDateCell.dataset.label = 'تاريخ نهاية الاشتراك';
+                        endDateCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-right');
+
+                        const subscriptionTypeCell = row.insertCell();
+                        subscriptionTypeCell.textContent = trainee.subscriptionType;
+                        subscriptionTypeCell.dataset.label = 'نظام الاشتراك';
+                        subscriptionTypeCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-right');
+
+                        const subscriptionPriceCell = row.insertCell();
+                        subscriptionPriceCell.textContent = trainee.subscriptionPrice;
+                        subscriptionPriceCell.dataset.label = 'سعر الاشتراك';
+                        subscriptionPriceCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-right');
+
+                        const paymentMethodCell = row.insertCell();
+                        paymentMethodCell.textContent = trainee.paymentMethod;
+                        paymentMethodCell.dataset.label = 'طريقة الدفع';
+                        paymentMethodCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-right');
+
+                        const notesCell = row.insertCell();
+                        notesCell.dataset.label = 'الملاحظات';
+                        notesCell.classList.add('px-6', 'py-4', 'text-right');
+                        const maxLength = 50;
+                        if (trainee.notes && trainee.notes.length > maxLength) {
+                            const truncatedNotes = trainee.notes.substring(0, maxLength) + '...';
+                            const notesSpan = document.createElement('span');
+                            notesSpan.textContent = truncatedNotes;
+                            notesSpan.classList.add('cursor-pointer', 'text-blue-500', 'hover:underline');
+                            notesSpan.dataset.fullNotes = trainee.notes;
+                            notesSpan.addEventListener('click', function() {
+                                openNotesModal(this.dataset.fullNotes);
+                            });
+                            notesCell.appendChild(notesSpan);
+                        } else {
+                            notesCell.textContent = trainee.notes || '';
+                        }
+
+                        const actionsCell = row.insertCell();
+                        actionsCell.dataset.label = 'الإجراءات';
+                        actionsCell.classList.add('px-6', 'py-4', 'whitespace-nowrap', 'text-left', 'flex', 'space-x-2', 'space-x-reverse' , "action");
+
+                        const editButton = document.createElement('button');
+                        editButton.innerHTML = '<i class="fas fa-edit text-indigo-500 hover:text-indigo-700"></i>';
+                        editButton.classList.add('p-2', 'rounded-md', 'hover:bg-gray-100', 'focus:outline-none');
+                        editButton.addEventListener('click', () => openEditModal(trainee.id));
+                        actionsCell.appendChild(editButton);
+
+                        const deleteButton = document.createElement('button');
+                        deleteButton.innerHTML = '<i class="fas fa-trash-alt text-red-500 hover:text-red-700"></i>';
+                        deleteButton.classList.add('p-2', 'rounded-md', 'hover:bg-gray-100', 'focus:outline-none');
+                        deleteButton.addEventListener('click', () => openDeleteConfirmationModal(trainee.id));
+                        actionsCell.appendChild(deleteButton);
+                    });
+                }
+            }
+
+            function updateStats() {
+                // إجمالي المتدربين
+                totalTraineesEl.textContent = trainees.length;
+                
+                // المتدربين نظام 8
+                const system8Count = trainees.filter(t => t.subscriptionType === '8').length;
+                system8TraineesEl.textContent = system8Count;
+                
+                // المتدربين نظام 12
+                const system12Count = trainees.filter(t => t.subscriptionType === '12').length;
+                system12TraineesEl.textContent = system12Count;
+                
+                // إجمالي الأموال
+                const totalMoney = trainees.reduce((sum, trainee) => {
+                    const price = parseFloat(trainee.subscriptionPrice) || 0;
+                    return sum + price;
+                }, 0);
+                totalMoneyEl.textContent = totalMoney.toFixed(2) + ' ر.س';
+            }
+
+            function saveToLocalStorage() {
+                localStorage.setItem('trainees', JSON.stringify(trainees));
+            }
+
+            function showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.classList.add('toast', type);
+                toast.textContent = message;
+                toastContainer.appendChild(toast);
+                setTimeout(() => {
+                    toast.remove();
+                }, 3000);
+            }
+
+            function openNotesModal(notes) {
+                fullNoteContent.textContent = notes;
+                viewNotesOverlay.style.display = 'flex';
+                viewNotesModal.classList.add('active');
+            }
+
+            function closeNotesModal() {
+                viewNotesOverlay.style.display = 'none';
+                viewNotesModal.classList.remove('active');
+            }
+
+            function openSettingsModal() {
+                document.getElementById('reminderValue').value = settings.reminderValue;
+                document.querySelector(`input[name="reminderType"][value="${settings.reminderType}"]`).checked = true;
+                
+                settingsOverlay.classList.add('active', 'pointer-events-auto');
+                settingsModal.classList.add('active');
+            }
+
+            function closeSettingsModal() {
+                settingsOverlay.classList.remove('active', 'pointer-events-auto');
+                settingsModal.classList.remove('active');
+            }
+
+            function saveSettings() {
+                settings.reminderType = document.querySelector('input[name="reminderType"]:checked').value;
+                settings.reminderValue = parseInt(document.getElementById('reminderValue').value);
+                
+                localStorage.setItem('settings', JSON.stringify(settings));
+                closeSettingsModal();
+                showToast('تم حفظ الإعدادات بنجاح', 'success');
+                checkForNotifications();
+            }
+
+            function loadSettings() {
+                if (localStorage.getItem('settings')) {
+                    settings = JSON.parse(localStorage.getItem('settings'));
+                }
+            }
+
+            function openNotificationsModal() {
+                renderNotifications();
+                notificationsOverlay.classList.add('active', 'pointer-events-auto');
+                notificationsModal.classList.add('active');
+            }
+
+            function closeNotificationsModal() {
+                notificationsOverlay.classList.remove('active', 'pointer-events-auto');
+                notificationsModal.classList.remove('active');
+            }
+
+            function renderNotifications() {
+                notificationsList.innerHTML = '';
+                
+                if (notifications.length === 0) {
+                    notificationsList.innerHTML = '<p class="text-center text-gray-500">لا توجد إشعارات</p>';
+                    return;
+                }
+                
+                notifications.forEach(notification => {
+                    const notificationItem = document.createElement('div');
+                    notificationItem.classList.add('notification-item');
+                    
+                    const notificationText = document.createElement('div');
+                    notificationText.innerHTML = `
+                        <strong>${notification.traineeName}</strong>
+                        <p class="text-sm ${notification.type === 'warning' ? 'notification-warning' : 'notification-danger'}">
+                            ${notification.message}
+                        </p>
+                        <p class="text-s text-gray-500">ينتهي في: ${notification.endDate}</p>
+                    `;
+                    
+                    notificationItem.appendChild(notificationText);
+                    notificationsList.appendChild(notificationItem);
+                });
+            }
+
+            function checkForNotifications() {
+                notifications = [];
+                
+                if (!settings.reminderValue || !settings.reminderType) {
+                    return;
+                }
+                
+                const now = new Date();
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                
+                trainees.forEach(trainee => {
+                    if (!trainee.endDate) return;
+                    
+                    const [day, month, year] = trainee.endDate.split('/').map(Number);
+                    const endDate = new Date(year, month - 1, day);
+                    
+                    // حساب الأيام المتبقية
+                    const timeDiff = endDate.getTime() - today.getTime();
+                    const daysRemaining = Math.ceil(timeDiff / (1000 * 3600 * 24));
+                    
+                    // حساب العتبة بناءً على الإعدادات
+                    let threshold = settings.reminderValue;
+                    if (settings.reminderType === 'weeks') {
+                        threshold *= 7;
+                    } else if (settings.reminderType === 'months') {
+                        threshold *= 30; // تقريباً
+                    }
+                    
+                    if (daysRemaining <= threshold && daysRemaining >= 0) {
+                        const notificationType = daysRemaining <= 3 ? 'danger' : 'warning';
+                        const message = daysRemaining === 0 
+                            ? 'ينتهي اشتراك المتدرب اليوم!' 
+                            : `ينتهي اشتراك المتدرب بعد ${daysRemaining} يوم${daysRemaining > 1 ? '' : ''}`;
+                        
+                        notifications.push({
+                            traineeName: trainee.name,
+                            traineeId: trainee.id,
+                            endDate: trainee.endDate,
+                            message: message,
+                            type: notificationType
+                        });
+                    }
+                });
+                
+                // حفظ الإشعارات
+                localStorage.setItem('notifications', JSON.stringify(notifications));
+                
+                // تحديث العداد
+                updateNotificationBadge();
+            }
+
+            function updateNotificationBadge() {
+                if (notifications.length > 0) {
+                    notificationBadge.textContent = notifications.length;
+                    notificationBadge.classList.remove('hidden');
+                } else {
+                    notificationBadge.classList.add('hidden');
+                }
+            }
+
+            // Assign the closeNotesModal function to the global scope so it can be called from HTML
+            window.closeNotesModal = closeNotesModal;
+        });
+
+
+
+       // نظام البحث البسيط حسب الاسم
+// نظام البحث مع عرض عدد النتائج
+const searchInput = document.getElementById('traineeSearch');
+const clearSearchBtn = document.getElementById('clearSearch');
+const resultsCountEl = document.getElementById('searchResultsCount');
+const resultsNumberEl = resultsCountEl.querySelector('span');
+
+function performSearchWithCount() {
+    const searchTerm = searchInput.value.trim().toLowerCase();
+    const rows = document.querySelectorAll('.trainee-row');
+    let matchedCount = 0;
+    
+    // إظهار/إخفاء زر المسح
+    clearSearchBtn.classList.toggle('hidden', searchTerm === '');
+    
+    // فلترة الصفوف وعد المطابقات
+    rows.forEach(row => {
+        const nameCell = row.querySelector('td[data-label="الاسم"]');
+        const name = nameCell.textContent.toLowerCase();
+        
+        if (searchTerm === '' || name.includes(searchTerm)) {
+            row.style.display = '';
+            if (searchTerm !== '') matchedCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // تحديث عدد النتائج
+    if (searchTerm === '') {
+        resultsCountEl.classList.add('hidden');
+    } else {
+        resultsCountEl.classList.remove('hidden');
+        resultsNumberEl.textContent = matchedCount;
+    }
+}
+
+// أحداث البحث
+searchInput.addEventListener('input', performSearchWithCount);
+
+// زر مسح البحث
+clearSearchBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    performSearchWithCount();
+    searchInput.focus();
+});
+
+// أحداث البحث
+searchInput.addEventListener('input', performSimpleSearch);
+
+// زر مسح البحث
+clearSearchBtn.addEventListener('click', () => {
+    searchInput.value = '';
+    performSimpleSearch();
+    searchInput.focus();
+});
+
+
+        // database 
+
+
+        function showToast(message, type = 'success') {
+                const toast = document.createElement('div');
+                toast.classList.add('toast', type);
+                toast.textContent = message;
+                toastContainer.appendChild(toast);
+                setTimeout(() => {
+                    toast.remove();
+                }, 3000);
+            }
+            // التأكد من تحميل المكتبة
+    if (typeof supabase === 'undefined') {
+      console.error('Supabase library not loaded!');
+      alert('Failed to load Supabase library.');
+    } else {
+      // إعداد الاتصال مع Supabase
+      const { createClient } = supabase;
+      const supabaseClient = createClient(
+        'https://zyzfqbfuxsskvrmhaump.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp5emZxYmZ1eHNza3ZybWhhdW1wIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQzOTk3MjAsImV4cCI6MjA1OTk3NTcyMH0.Hu2Bk3gG-IwDOKagpJ6Fi_unnljP1aiRUrZ7bCOUppo'
+      );
+
+      // زر حفظ البيانات إلى Supabase
+      document.getElementById('saveButton').addEventListener('click', async () => {
+        // استرجاع البيانات من localStorage
+        let data = localStorage.getItem("trainees");
+
+        if (!data) {
+            showToast('لا يوجد بيانات لحفظها', 'danger');
+
+          return;
+        }
+
+        // تحويل البيانات إلى JSON
+        try {
+          data = JSON.parse(data); // تحويل النص إلى كائن JSON
+        } catch (e) {
+          console.error('Invalid JSON format:', e);
+          alert('Error: Data in localStorage is not valid JSON!');
+          return;
+        }
+
+        try {
+          // تحديد السجل الذي سيتم تحديثه
+          const targetId = 4; // يمكنك تغيير هذا بناءً على منطق التطبيق
+
+          // التحقق مما إذا كان السجل موجودًا
+          const { data: existingData, error: selectError } = await supabaseClient
+            .from('data_trainer')
+            .select('id')
+            .eq('id', targetId)
+            .maybeSingle();
+
+          if (selectError) {
+            throw selectError;
+          }
+
+          if (existingData) {
+            // تحديث السجل الموجود
+            const { data: responseData, error } = await supabaseClient
+              .from('data_trainer')
+              .update({ data: data })
+              .eq('id', targetId);
+
+            if (error) {
+              throw error;
+            }
+
+            console.log('Data updated:', responseData);
+            showToast('تم تحديث البيانات بنجاح', 'success');
+
+          } else {
+            // إدخال سجل جديد إذا لم يكن موجودًا
+            const { data: responseData, error } = await supabaseClient
+              .from('data_trainer')
+              .insert([{ id: targetId, data: data }]);
+
+            if (error) {
+              throw error;
+            }
+
+            console.log('Data inserted:', responseData);
+            showToast('تم حفظ نسخة من البيانات', 'success');
+
+          }
+        } catch (error) {
+          console.error('Error:', error);
+        //   alert(`Error saving data: ${error.message}`);
+          showToast('خطا في حفظ نسخة البيانات لازم تكون موصل نت', 'danger');
+
+        }
+      });
+
+      // زر استرجاع البيانات من Supabase وحفظها في localStorage
+      document.getElementById('fetchButton').addEventListener('click', async () => {
+        try {
+          // تحديد السجل المطلوب استرجاعه
+          const targetId = 4; // يمكنك تغيير هذا بناءً على منطق التطبيق
+
+          // استرجاع البيانات من Supabase
+          const { data: fetchedData, error } = await supabaseClient
+            .from('data_trainer')
+            .select('data')
+            .eq('id', targetId)
+            .maybeSingle();
+
+          if (error) {
+            throw error;
+          }
+
+          if (!fetchedData) {
+            showToast('لا يوجد بيانات لاسترجعها', 'danger');
+
+            return;
+          }
+
+          // مسح البيانات القديمة من localStorage وتخزين البيانات الجديدة
+          localStorage.removeItem('trainees');
+          localStorage.setItem('trainees', JSON.stringify(fetchedData.data));
+
+          console.log('Data fetched and saved to localStorage:', fetchedData.data);
+          showToast('تم استرجاع البيانات ', 'success');
+          setTimeout(()=>{
+                    console.log("refrehs")
+                    window.location.reload()
+          },2000)
+        } catch (error) {
+          console.error('Error:', error);
+        //   alert(`Error fetching data: ${error.message}`);
+        showToast('خطا في جلب نسخة البيانات لازم تكون موصل نت', 'danger');
+        }
+      });
+    }
+    </script>
+</body>
+</html>
